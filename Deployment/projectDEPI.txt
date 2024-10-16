@@ -1,0 +1,404 @@
+from pywebio.input import *
+from pywebio.output import *
+from pywebio.session import *
+from pywebio.pin import *
+from functools import partial
+import pprint
+
+from pywebio import start_server, config
+import time
+import random as r
+from pywebio.session import run_js
+from pywebio.session import set_env
+from pywebio.output import put_html
+import base64
+import pandas as pd
+import pyodbc
+
+
+
+def extract_data():
+    print("Extracting data from SQL database...")
+
+    # Connection to the SQL Server
+    connection = pyodbc.connect(
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        "SERVER=LAPTOP-PC\MOHAMED;"  # Your server name here
+        "DATABASE=DB;"  # Your database name here
+        "Trusted_Connection=yes;"
+        "TrustServerCertificate=yes;"
+    )
+
+    # Query to extract data
+    query = "SELECT * FROM road_accidents"
+
+    # Read data from SQL into a pandas DataFrame
+    df = pd.read_sql(query, connection)
+
+    # Print out the column names to ensure they are correct
+    #print("Columns in the dataset:", df.columns)
+
+    # Close the connection
+    connection.close()
+    df = df.sort_values(by='Accident_Date', ascending=True)
+    return df
+
+
+def delete_all_data():
+    print("Deleting all rows from SQL database...")
+
+    # Connection to the SQL Server
+    connection = pyodbc.connect(
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        "SERVER=LAPTOP-PC\MOHAMED;"  # Your server name here
+        "DATABASE=DB;"  # Your database name here
+        "Trusted_Connection=yes;"
+        "TrustServerCertificate=yes;"
+    )
+
+    cursor = connection.cursor()
+
+    # SQL query to delete all rows from the table
+    delete_query = "DELETE FROM road_accidents"  # Replace with your table name
+
+    # Execute the deletion
+    cursor.execute(delete_query)
+
+    # Commit the transaction
+    connection.commit()
+
+
+
+    # Close the connection
+    cursor.close()
+    connection.close()
+
+
+def insert_data(df):
+    print("Inserting data into SQL database...")
+    delete_all_data()
+    # Connection to the SQL Server
+    connection = pyodbc.connect(
+        "DRIVER={ODBC Driver 17 for SQL Server};"
+        "SERVER=LAPTOP-PC\MOHAMED;"  # Your server name here
+        "DATABASE=DB;"  # Your database name here
+        "Trusted_Connection=yes;"
+        "TrustServerCertificate=yes;"
+    )
+
+    cursor = connection.cursor()
+
+    # Assuming the DataFrame has columns corresponding to the SQL table columns
+    insert_query = "INSERT INTO road_accidents (Reference_Number,Grid_Ref_Easting,Grid_Ref_Northing,Number_of_Vehicles,Number_of_Casualties,Accident_Date,Time_24hr,First_Road_Class,Road_Surface,Lighting_Conditions,Weather_Conditions," \
+                   "Casualty_Class,Casualty_Severity," \
+                   "Sex_of_Casualty,Age_of_Casualty,Type_of_Vehicle) VALUES (?, ?, ? ,? , ?, ?, ? ,? , ?, ?, ? ,? , ?, ?, ? ,?)"  # Adjust columns
+
+    # Loop over the rows in the DataFrame and insert them one by one
+
+    for index, row in df.iterrows():
+
+        cursor.execute(insert_query, row['Reference_Number'], row['Grid_Ref_Easting'], row['Grid_Ref_Northing'], row['Number_of_Vehicles'],
+                       row['Number_of_Casualties'], row['Accident_Date'], row['Time_24hr']
+                       , row['First_Road_Class'], row['Road_Surface'], row['Lighting_Conditions'], row['Weather_Conditions'],
+                       row['Casualty_Class'], row['Casualty_Severity'], row['Sex_of_Casualty'], row['Age_of_Casualty'], row['Type_of_Vehicle'])
+
+
+
+    # Commit the transaction to the database
+    connection.commit()
+
+    print("Data insertion complete.")
+
+    # Close the connection
+    cursor.close()
+    connection.close()
+
+
+
+def convert_image_to_base64(image_path):
+    with open(image_path, "rb") as image_file:
+        base64_str = base64.b64encode(image_file.read()).decode('utf-8')
+    return base64_str
+
+
+def background_page(image_path, size, position="250px 290px"):
+    # Path to your image
+    # Convert image to base64
+
+    base64_str = convert_image_to_base64(image_path)
+
+    # Define the HTML with inline CSS for background image
+    html_content = f'''
+    <html>
+    <head>
+        <style>
+            body {{
+                background-image: url(data:image/jpeg;base64,{base64_str});
+                background-size: {size}px;
+                background-position: {position};
+                background-repeat:no-repeat;
+                bottom:5%;
+
+            }}
+        </style>
+    </head>
+    <body>
+    </body>
+    </html>
+    '''
+
+    # Put the HTML content to the web page
+    put_html(html_content)
+
+
+
+# custom css styling for our buttons
+css = """
+#pywebio-scope-background button{
+    width:40%;
+    height:30%;
+    position:relative; 
+    left:32%;
+    font-size: 25px;
+
+}
+"""
+
+# configure the theme and styling to our buttons
+config(theme='minty')
+@config(css_style=css)
+def bground():
+    clear()
+    hide_footer_css = """
+    <style>
+    .pywebio_footer {
+        display: none;
+    }
+    </style>
+    """
+    put_html(hide_footer_css)
+
+    set_env(title='Patient Management System')
+    put_scope("background").style('''padding-top:5px;padding-bottom:5%;left:1%;position:fixed;right:1%;top:1%;bottom:1%;
+            border-radius:20px; background: rgb(84,121,128);background: 
+            linear-gradient(0deg, rgba(84,121,128,1) 32%, rgba(45,150,152,1) 49%, rgba(153,153,153,1) 69%, rgba(47,149,153,1) 89%);
+            ''')
+    with use_scope("background"):
+        # app Title Header
+        put_html("<br/>")
+        put_html("<h1> WELCOME TO <br/> Accident Data System </h1>").style('''text-align:center;font-weight:650px; 
+        font-style:bold;font-size:40px;color:#ffffff;text-shadow: 1.5px 1.5px #ff0000;''')
+
+        # create a scope for call to Action buttons
+        with use_scope("CTA", clear=True):
+            put_html("<br/><br/>")
+            put_button("Insert", onclick= Insert_click)
+            put_button("Update", onclick=update_click)
+            put_button("Delete", onclick=delete_click)
+            put_button("Visualization", onclick=visualization)
+            put_button("Data", onclick=V_data)
+            put_button("Search", onclick=search_data)
+
+
+
+########insert#######
+def Insert_click():
+    clear()
+    put_button("Home", onclick=bground)
+    #df = pd.read_csv("dataset.csv")
+    df = extract_data()
+
+
+    new = input_group(
+        "Insert Data",
+        [input('Reference Number', name='ReferenceNumber', style=" width: 150px;",
+               help_text="This is a unique identifier for each accident record (e.g., 1112091, 1180869)."),
+            input('Grid Ref: Easting', name='Easting', type='number', style=" width: 150px;",
+                  help_text="The x-coordinate in the UK’s Ordnance Survey National Grid system, representing the position of the accident location on the grid (e.g., 429175, 430429)."),
+            input('Grid Ref: Northing', name='Northing', type='number', style=" width: 150px;",
+                  help_text="The y-coordinate in the UK’s Ordnance Survey National Grid system, representing the northing position on the grid (e.g., 431904, 431025)."),
+            input('Number of Vehicles ', name='NVehicles', type='number', style=" width: 150px;",
+                  help_text="The total number of vehicles involved in the accident (e.g., 2, 3)."),
+            input('Number of Casualties ', name='NCasualties', type='number', style=" width: 150px;",
+               help_text="The total number of Casualties involved in the accident."),
+            input('Accident Date', name='Date', type='date', style=" width: 150px;",
+                  help_text="The date when the accident occurred (e.g., 01-Jan-14, 08-Jan-14)."),
+            input('Time (24hr):', name='time', type='number', style=" width: 150px;",
+                  help_text="The time the accident happened in 24-hour format (e.g., 1840, 1430)."),
+            input('1st Road Class:', name='1RC', type='number', style=" width: 150px;",
+                  help_text="The classification of the road where the accident occurred. \nExamples: Unclassified (roads not assigned a specific classification) 0\nMotorway (major highways) 1") ,
+            input('Road Surface', name='RS', type='number', style=" width: 150px;",
+                  help_text="The condition of the road surface at the time of the accident (e.g., Wet / Damp) from 1 to 5."),
+            input('Lighting Conditions', name='LC', type='number', style=" width: 150px;",
+                  help_text="The lighting situation when the accident occurred from 1 to 5."),
+            input('Weather Conditions', name='WC', type='number', style=" width: 150px;",
+                  help_text="The weather at the time of the accident , from 1 to 10."),
+            input('Casualty Class', name='CC', type='number', style=" width: 150px;",
+                  help_text="Describes whether the casualty was a driver, passenger, or pedestrian (e.g., 1 = Driver , 2 = passenger , 3 = pedestrian)"),
+            input('Casualty Severity', name='CS', type='number', style=" width: 150px;",
+                  help_text="The severity of the injury sustained by the casualty, from 1 to 3 ."),
+            input('Sex of Casualty', name='Sex', type='number', style=" width: 150px;",
+                  help_text="The gender of the casualty (e.g., Male) , 1 : Male or 2 : Female"),
+            input('Age of Casualty', name='Age', type='number', style=" width: 150px;",
+                  help_text="The age of the person injured."),
+            input('Type of Vehicle', name='Vehicle', type='number', style=" width: 150px;",
+                  help_text="The type of vehicle the casualty was in (e.g., Car)"),
+        ]
+    )
+
+    data = pd.DataFrame([list(new.values())], columns=["Reference_Number", "Grid_Ref_Easting", "Grid_Ref_Northing", "Number_of_Vehicles",
+    "Number_of_Casualties", "Accident_Date", "Time_24hr", "First_Road_Class", "Road_Surface", "Lighting_Conditions", "Weather_Conditions",
+    "Casualty_Class", "Casualty_Severity", "Sex_of_Casualty", "Age_of_Casualty", "Type_of_Vehicle"])
+
+
+
+    #data=pd.DataFrame(data)
+    #df=pd.merge(df,data , on='Reference Number')
+    df=df.append(data,ignore_index=True)
+
+    insert_data(df)
+
+    print(df.tail())
+
+
+def visualization():
+    clear()
+    put_button("Home", onclick=bground)
+
+    while True:
+        digram = select("Choose the plot", options=["Distribution of Number of Vehicels involved in Accidents",
+                                                       "Correlation Matrix of Number of Vehicels & Casualties",
+                                                       "Number of Accidents per Month",
+                                                       "Distribution of Predicted Damage Extent",
+                                                       "Box plot Number of Casualties by Damage Extent",
+                                                       "Correlation Matrix of Number of Vehicels & Casualties AND Damage Extent",
+                                                    "Box plot Age of Casualties by Severity Level"])
+
+        if digram=="Distribution of Number of Vehicels involved in Accidents":
+            background_page("D:\program-system\download\Distribution of Number of Vehicels involved in Accidents.jpeg",500)
+        elif digram=="Correlation Matrix of Number of Vehicels & Casualties":
+            background_page("D:\program-system\download\Correlation Matrix of Number of Vehicels & Casualties.jpeg", 450)
+        elif digram=="Number of Accidents per Month":
+            background_page("D:\program-system\download\\Number of Accidents per Month.jpeg", 580)
+        elif digram=="Distribution of Predicted Damage Extent":
+            background_page("D:\program-system\download\Distribution of Predicted Damage Extent.jpeg", 550)
+        elif digram=="Box plot Number of Casualties by Damage Extent":
+            background_page("D:\program-system\download\\Number of Casualties by Damage Extent.jpeg", 550)
+        elif digram=="Correlation Matrix of Number of Vehicels & Casualties AND Damage Extent":
+            background_page("D:\program-system\download\Correlation Matrix of Number of Vehicels & Casualties AND Damage Extent.jpeg", 550)
+        elif digram=="Box plot Age of Casualties by Severity Level":
+            background_page(
+                "D:\program-system\download\Box plot Age of Casualties by Severity Level.jpeg",590)
+
+
+def V_data():
+    clear()
+    put_button("Home", onclick=bground)
+
+    df = extract_data()
+
+    last_20_rows = df.tail(20)
+    put_table([df.columns.values.tolist()] + last_20_rows.values.tolist())
+
+
+def delete_click():
+    clear()
+    put_button("Home", onclick=bground)
+    """df = pd.read_csv("dataset.csv" , columns=["Reference_Number", "Grid_Ref_Easting", "Grid_Ref_Northing", "Number_of_Vehicles",
+    "Number_of_Casualties", "Accident_Date", "Time_24hr", "First_Road_Class", "Road_Surface", "Lighting_Conditions", "Weather_Conditions",
+    "Casualty_Class", "Casualty_Severity", "Sex_of_Casualty", "Age_of_Casualty", "Type_of_Vehicle"])"""
+
+    df = extract_data()
+
+    x=input_group("delete",
+                  [input("enter Reference Number to delete :" ,name="del" , style=" width: 250px;")])
+
+    x=df[df["Reference_Number"]==x["del"]].index
+
+    df=df.drop(x)
+    insert_data(df)
+
+
+
+def update_click():
+    clear()
+    put_button("Home", onclick=bground)
+    #background_page("D:\\update.jpg", 800, "700px 250px")
+
+    df = extract_data()
+
+    x = input_group("Update",
+                    [input("enter Reference Number to Update the data :", name="update", style=" width: 250px;")])
+
+    old=df[df["Reference_Number"] == x["update"]].values
+    old=old[0].tolist()
+
+    new = input_group(
+        "Insert Data",
+        [input('Reference Number', name='ReferenceNumber', style=" width: 150px;",value=old[0],
+               help_text="This is a unique identifier for each accident record (e.g., 1112091, 1180869)."),
+         input('Grid Ref: Easting', name='Easting', type='number', style=" width: 150px;",value=old[1],
+               help_text="The x-coordinate in the UK’s Ordnance Survey National Grid system, representing the position of the accident location on the grid (e.g., 429175, 430429)."),
+         input('Grid Ref: Northing', name='Northing', type='number', style=" width: 150px;",value=old[2],
+               help_text="The y-coordinate in the UK’s Ordnance Survey National Grid system, representing the northing position on the grid (e.g., 431904, 431025)."),
+         input('Number of Vehicles ', name='NVehicles', type='number', style=" width: 150px;",value=old[3],
+               help_text="The total number of vehicles involved in the accident (e.g., 2, 3)."),
+         input('Number of Casualties ', name='NCasualties', type='number', style=" width: 150px;",value=old[4],
+               help_text="The total number of Casualties involved in the accident."),
+         input('Accident Date', name='Date', style=" width: 150px;",value=old[5],
+               help_text="The date when the accident occurred (e.g., 01-Jan-14, 08-Jan-14)."),
+         input('Time (24hr)', name='time', type='number', style=" width: 150px;",value=old[6],
+               help_text="The time the accident happened in 24-hour format (e.g., 1840, 1430)."),
+         input('1st Road Class', name='1RC', type='number', style=" width: 150px;",value=old[7],
+               help_text="The classification of the road where the accident occurred. \nExamples: Unclassified (roads not assigned a specific classification) 0\nMotorway (major highways) 1"),
+         input('Road Surface', name='RS', type='number', style=" width: 150px;",value=old[8],
+               help_text="The condition of the road surface at the time of the accident (e.g., Wet / Damp) from 1 to 5."),
+         input('Lighting Conditions', name='LC', type='number', style=" width: 150px;",value=old[9],
+               help_text="The lighting situation when the accident occurred from 1 to 5."),
+         input('Weather Conditions', name='WC', type='number', style=" width: 150px;",value=old[10],
+               help_text="The weather at the time of the accident , from 1 to 10."),
+         input('Casualty Class', name='CC', type='number', style=" width: 150px;",value=old[11],
+               help_text="Describes whether the casualty was a driver, passenger, or pedestrian (e.g., 1 = Driver , 2 = passenger , 3 = pedestrian)"),
+         input('Casualty Severity', name='CS', type='number', style=" width: 150px;",value=old[12],
+               help_text="The severity of the injury sustained by the casualty, from 1 to 3 ."),
+         input('Sex of Casualty', name='Sex', type='number', style=" width: 150px;",value=old[13],
+               help_text="The gender of the casualty (e.g., Male) , 1 : Male or 2 : Female"),
+         input('Age of Casualty', name='Age', type='number', style=" width: 150px;",value=old[14],
+               help_text="The age of the person injured."),
+         input('Type of Vehicle', name='Vehicle', type='number', style=" width: 150px;",value=old[15],
+               help_text="The type of vehicle the casualty was in (e.g., Car)"),
+         ]
+    )
+
+    data = pd.DataFrame([list(new.values())],
+                        columns=["Reference_Number", "Grid_Ref_Easting", "Grid_Ref_Northing", "Number_of_Vehicles",
+                                 "Number_of_Casualties", "Accident_Date", "Time_24hr", "First_Road_Class",
+                                 "Road_Surface", "Lighting_Conditions", "Weather_Conditions",
+                                 "Casualty_Class", "Casualty_Severity", "Sex_of_Casualty", "Age_of_Casualty",
+                                 "Type_of_Vehicle"])
+
+    df[df["Reference_Number"] == x["update"]]=data.values
+
+    insert_data(df)
+
+
+def search_data():
+    clear()
+    put_button("Home", onclick=bground)
+
+    df = extract_data()
+
+    x = input_group("Search",
+                    [input("enter Reference Number to Search the data :", name="Search", style=" width: 250px;")])
+    old = df[df["Reference_Number"] == x["Search"]].values
+
+    put_html("<br/><br/>")
+    put_table([df.columns.values.tolist()] + old.tolist())
+
+if __name__ == "__main__":
+
+    start_server(bground, debug=True)
+
+
+
+
